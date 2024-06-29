@@ -28,7 +28,7 @@ const ChatPage = () => {
 
   const [loadingConversations, setLoadingConversations] = useState(true);
   const [searchText, setSearchText] = useState("");
-  const [searchingConversation, setSearchingConversation] = useState();
+  const [searchingConversation, setSearchingConversation] = useState(false);
 
   const showToast = useShowToast();
   const { socket, onlineUsers } = useSocket();
@@ -49,13 +49,11 @@ const ChatPage = () => {
           }
           return conversation;
         });
-
         return updatedConversation;
       });
     });
 
     socket?.on("messagesSeen", ({ conversationId }) => {
-      console.log(conversationId);
       setConversations((prevConversations) => {
         const updatedConversation = prevConversations.map((conversation) => {
           if (conversationId === conversation._id) {
@@ -70,7 +68,11 @@ const ChatPage = () => {
         return updatedConversation;
       });
     });
-    return () => socket?.off("newMessage");
+
+    return () => {
+      socket?.off("newMessage");
+      socket?.off("messagesSeen");
+    };
   }, [socket]);
 
   useEffect(() => {
@@ -87,15 +89,16 @@ const ChatPage = () => {
         const data = await res.json();
         if (data.error) {
           showToast("Error", data.error, "error");
+        } else {
+          setConversations(data);
         }
-
-        setConversations(data);
       } catch (error) {
         showToast("Error", error.message, "error");
       } finally {
         setLoadingConversations(false);
       }
     };
+
     getConversations();
   }, []);
 
@@ -116,42 +119,34 @@ const ChatPage = () => {
         return;
       }
 
-      if (
-        conversations.find(
-          (conversation) => conversation.participants[0]._id === currentUser._id
+      const existingConversation = conversations.find((conversation) =>
+        conversation.participants.find(
+          (participant) => participant._id === searchedUser._id
         )
-      ) {
-        setCurrentConversation({
-          _id: conversations.find(
-            (conversation) =>
-              conversation.participants[0]._id === searchedUser_id
-          ),
-          userId: searchedUser._id,
-          username: searchedUser.username,
-          userProfilePic: searchedUser.profilePic,
-        });
-        return;
-      }
+      );
 
-      const mockConversation = {
-        mock: true,
-        _id: Date.now(),
-        participants: [
-          {
-            _id: searchedUser._id,
-            username: searchedUser.username,
-            profilePic: searchedUser.profilePic,
+      if (existingConversation) {
+        setCurrentConversation(existingConversation);
+      } else {
+        const mockConversation = {
+          mock: true,
+          _id: Date.now(),
+          participants: [
+            {
+              _id: searchedUser._id,
+              username: searchedUser.username,
+              profilePic: searchedUser.profilePic,
+            },
+          ],
+          lastMessage: {
+            text: "",
+            sender: "",
           },
-        ],
-        lastMessage: {
-          text: "",
-          sender: "",
-        },
-      };
+        };
 
-      setConversations((prevConv) => {
-        return [mockConversation, ...prevConv];
-      });
+        setConversations((prevConv) => [mockConversation, ...prevConv]);
+        setCurrentConversation(mockConversation);
+      }
     } catch (error) {
       showToast("Error", error.message, "error");
     } finally {
@@ -221,9 +216,11 @@ const ChatPage = () => {
           {!loadingConversations &&
             conversations.map((conversation) => (
               <Conversation
-                isOnline={onlineUsers.includes(
-                  conversation.participants[0]._id
-                )}
+                isOnline={
+                  onlineUsers
+                    ? onlineUsers.includes(conversation.participants[0]._id)
+                    : false
+                }
                 key={conversation._id}
                 conversation={conversation}
               />
@@ -244,7 +241,7 @@ const ChatPage = () => {
             <Text>Select Conversation to start messaging</Text>
           </Flex>
         ) : (
-          <MessageContainer />
+          <MessageContainer currentConversation={currentConversation} />
         )}
       </Flex>
     </Box>

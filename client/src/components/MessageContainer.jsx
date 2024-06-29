@@ -1,3 +1,4 @@
+import React, { useEffect, useRef, useState } from "react";
 import {
   Avatar,
   Divider,
@@ -9,7 +10,6 @@ import {
   Text,
   useColorModeValue,
 } from "@chakra-ui/react";
-import { useEffect, useRef, useState } from "react";
 import { NavLink } from "react-router-dom";
 import { useRecoilValue } from "recoil";
 import { currentConversationAtom } from "../atoms/convAtoms";
@@ -19,26 +19,23 @@ import MessageInput from "./MessageInput";
 import { useSocket } from "../context/SocketContext";
 import userAtom from "../atoms/userAtom";
 import messageNotificationSound from "../assets/sounds/message.mp3";
+
 const MessageContainer = () => {
   const currentConversation = useRecoilValue(currentConversationAtom);
   const currentUser = useRecoilValue(userAtom);
-
   const [messages, setMessages] = useState([]);
   const [loadingMessages, setLoadingMessages] = useState(true);
-
   const showToast = useShowToast();
   const { socket, onlineUsers } = useSocket();
 
-  const isOnline = onlineUsers.includes(currentConversation.userId);
+  const isOnline =
+    onlineUsers && onlineUsers.includes(currentConversation.userId);
 
   const latestMessageRef = useRef(null);
 
   useEffect(() => {
     socket.on("newMessage", (newMessage) => {
-      setMessages((prevMessages) => {
-        return [...prevMessages, newMessage];
-      });
-
+      setMessages((prevMessages) => [...prevMessages, newMessage]);
       if (!document.hasFocus()) {
         const sound = new Audio(messageNotificationSound);
         sound.play();
@@ -52,7 +49,6 @@ const MessageContainer = () => {
     const lastMessageFromOtherUser =
       messages.length &&
       messages[messages.length - 1].sender !== currentUser._id;
-
     if (lastMessageFromOtherUser) {
       socket.emit("markMessagesAsSeen", {
         conversationId: currentConversation._id,
@@ -62,19 +58,18 @@ const MessageContainer = () => {
 
     socket.on("messagesSeen", ({ conversationId }) => {
       if (conversationId === currentConversation._id) {
-        setMessages((prevMessages) => {
-          return prevMessages.map((message) => {
+        setMessages((prevMessages) =>
+          prevMessages.map((message) => {
             if (message.sender === currentUser._id) {
-              return {
-                ...message,
-                seen: true,
-              };
+              return { ...message, seen: true };
             }
             return message;
-          });
-        });
+          })
+        );
       }
     });
+
+    return () => socket.off("messagesSeen");
   }, [socket, currentUser._id, messages, currentConversation]);
 
   useEffect(() => {
@@ -118,16 +113,11 @@ const MessageContainer = () => {
       p={2}
       direction={"column"}
     >
-      {/* Header */}
       <NavLink to={`/${currentConversation.username}`}>
         <Flex alignItems={"center"} p={2} gap={2} w={"full"}>
           <Avatar
             src={currentConversation.userProfilePic}
-            size={{
-              base: "xs",
-              sm: "sm",
-              md: "md",
-            }}
+            size={{ base: "xs", sm: "sm", md: "md" }}
           />
           <Stack gap={1}>
             <Text
@@ -151,8 +141,6 @@ const MessageContainer = () => {
         </Flex>
         <Divider />
       </NavLink>
-
-      {/* Body */}
       <Flex
         flexDirection={"column"}
         gap={2}
@@ -180,21 +168,19 @@ const MessageContainer = () => {
                 {i % 2 !== 0 && <SkeletonCircle size={7} />}
               </Flex>
             ))
-          : messages.map((message) => {
-              return (
-                <Flex
-                  key={message._id}
-                  direction={"column"}
-                  ref={
-                    messages.length - 1 === messages.indexOf(message)
-                      ? latestMessageRef
-                      : null
-                  }
-                >
-                  <Message message={message} />
-                </Flex>
-              );
-            })}
+          : messages.map((message) => (
+              <Flex
+                key={message._id}
+                direction={"column"}
+                ref={
+                  messages.length - 1 === messages.indexOf(message)
+                    ? latestMessageRef
+                    : null
+                }
+              >
+                <Message message={message} />
+              </Flex>
+            ))}
       </Flex>
       <MessageInput setMessages={setMessages} />
     </Flex>
